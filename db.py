@@ -1,41 +1,60 @@
 import os
-from pymongo import MongoClient
-#from config import MONGO_URI
 import logging
+from dotenv import load_dotenv
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+load_dotenv()
 logger = logging.getLogger(__name__)
 
 MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("DB_NAME", "nss_portal")
 
-try:
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-    # Test the connection
-    client.admin.command('ping')
-    db = client[DB_NAME]  #your DB name
-    logger.info("Successfully connected to MongoDB")
-except Exception as e:
-    logger.error(f"Failed to connect to MongoDB: {e}")
-    # Create a mock database object for development
-    class MockDB:
-        def __getattr__(self, name):
-            return MockCollection()
-        
-        def __getitem__(self, name):
-            # Handles db['collection_name'] <--- THIS WAS MISSING
-            return MockCollection()
-        
-    class MockCollection:
-        def find_one(self, *args, **kwargs):
-            return None
-        def find(self, *args, **kwargs):
-            return []
-        def insert_one(self, *args, **kwargs):
-            return type('Result', (), {'inserted_id': 'mock_id'})()
-        def update_one(self, *args, **kwargs):
-            return type('Result', (), {'modified_count': 1})()
-    
-    db = MockDB()
-    logger.warning("Using mock database - MongoDB connection failed") 
+
+class Database:
+    _client = None
+    _db = None
+
+    @classmethod
+    def connect(cls):
+        if cls._db:
+            return cls._db
+
+        if not MONGO_URI:
+            raise ValueError("MONGO_URI environment variable is not set")
+
+        try:
+            cls._client = MongoClient(
+                MONGO_URI,
+                serverSelectionTimeoutMS=5000,
+                maxPoolSize=50,
+                minPoolSize=5,
+                retryWrites=True,
+            )
+
+            cls._client.admin.command("ping")
+
+            cls._db = cls._client[DB_NAME]
+
+            logger.info("MongoDB connection established")
+
+            return cls._db
+
+        except (ConnectionFailure, ServerSelectionTimeoutError) as e:
+            logger.exception("MongoDB connection failed")
+            raise RuntimeError("Database unavailable") from e
+
+    @classmethod
+    def get_db(cls):
+        if cls._db is None:
+            return cls.connect()
+        return cls._db
+
+    @classmethod
+    def close(cls):
+        if cls._client:
+            cls._client.close()
+            logger.info("MongoDB connection closed")
+
+
+db = Database.get_db()

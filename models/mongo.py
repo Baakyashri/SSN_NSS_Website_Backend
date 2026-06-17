@@ -1,4 +1,8 @@
-from db import db
+from pymongo import MongoClient
+from config import Config
 
-# Use the shared database connection
-albums_collection = db['albums']
+client = MongoClient(Config.MONGO_URI)
+
+db = client.get_database()
+
+albums_collection = db["albums"]

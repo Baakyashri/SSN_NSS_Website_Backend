@@ -63,34 +63,6 @@ def validate_required_fields(data: Dict[str, Any], required_fields: list) -> Tup
     
     return True, "Valid"
 
-def validate_role(role: str) -> Tuple[bool, str]:
-    """Validate user role"""
-    allowed_roles = ['admin', 'verticalhead', 'volunteer']
-    if role not in allowed_roles:
-        return False, f"Invalid role. Must be one of: {', '.join(allowed_roles)}"
-    
-    return True, "Valid"
-
-def validate_vertical(vertical: str) -> Tuple[bool, str]:
-    """Validate vertical name"""
-    if not vertical:
-        return False, "Vertical name is required"
-    
-    # Sanitize vertical name
-    vertical = sanitize_input(vertical, 50)
-    
-    # Check length
-    if len(vertical) < 2:
-        return False, "Vertical name too short"
-    
-    if len(vertical) > 50:
-        return False, "Vertical name too long"
-    
-    # Only allow alphanumeric characters and spaces
-    if not re.match(r'^[a-zA-Z0-9\s]+$', vertical):
-        return False, "Vertical name can only contain letters, numbers, and spaces"
-    
-    return True, "Valid"
 
 def validate_activity_data(data: Dict[str, Any]) -> Tuple[bool, str]:
     """Validate activity data"""
