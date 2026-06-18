@@ -28,10 +28,7 @@ class Config:
         CLOUDINARY_API_SECRET
     ])
 
-    DEBUG = os.getenv(
-        "DEBUG",
-        "False"
-    ).lower() == "true"
+    DEBUG = os.getenv("DEBUG","False").lower() == "true"
 
     CORS_ORIGINS = [
         "https://nss-ssn.vercel.app",

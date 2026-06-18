@@ -1,18 +1,18 @@
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
-
-from config import Config
-
-from routes.auth_routes import auth_bp
-from routes.user_routes import user_bp
-
-
-
-
-
+from flask import send_from_directory
 import os
 import logging
+from config import Config
+from routes.auth_routes import auth_bp
+from routes.user_routes import user_bp
+from routes.activities_routes import activities_bp
+from routes.album_routes import albums_bp
+from routes.photos_routes import photos_bp
+from routes.report_routes import reports_bp
+from routes.contact_routes import contact_bp
+
 
 # --------------------------------------------------
 # App Initialization
@@ -80,14 +80,25 @@ def internal_error(error):
     }), 500
 
 
+
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    return send_from_directory(
+        Config.UPLOAD_FOLDER,
+        filename
+    )
+
 # --------------------------------------------------
 # Register Blueprints
 # --------------------------------------------------
 
 app.register_blueprint(auth_bp, url_prefix="/auth")
 app.register_blueprint(user_bp, url_prefix="/user")
-
-
+app.register_blueprint(activities_bp,url_prefix="/activities")
+app.register_blueprint(albums_bp,url_prefix="/albums")
+app.register_blueprint(photos_bp,url_prefix="/photos")
+app.register_blueprint(reports_bp,url_prefix="/reports")
+app.register_blueprint(contact_bp,url_prefix="/contact")
 
 
 # --------------------------------------------------

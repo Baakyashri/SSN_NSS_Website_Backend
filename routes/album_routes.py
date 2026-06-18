@@ -58,7 +58,7 @@ def delete_photo_from_storage(photo):
 # GET ALL ALBUMS
 # ==================================================
 
-@albums_bp.route("/api/albums", methods=["GET"])
+@albums_bp.route("/albums", methods=["GET"])
 def get_albums():
     albums = list(albums_collection.find())
 
@@ -72,7 +72,7 @@ def get_albums():
 # GET SINGLE ALBUM
 # ==================================================
 
-@albums_bp.route("/api/albums/<album_id>", methods=["GET"])
+@albums_bp.route("/albums/<album_id>", methods=["GET"])
 def get_album(album_id):
 
     album = get_album_by_id(album_id)
@@ -89,7 +89,7 @@ def get_album(album_id):
 # CREATE ALBUM
 # ==================================================
 
-@albums_bp.route("/api/albums", methods=["POST"])
+@albums_bp.route("/albums", methods=["POST"])
 def create_album():
 
     data = request.get_json()
@@ -130,7 +130,7 @@ def create_album():
 # DELETE ALBUM
 # ==================================================
 
-@albums_bp.route("/api/albums/<album_id>", methods=["DELETE"])
+@albums_bp.route("/albums/<album_id>", methods=["DELETE"])
 def delete_album(album_id):
 
     album = get_album_by_id(album_id)
@@ -157,7 +157,7 @@ def delete_album(album_id):
 # ==================================================
 
 @albums_bp.route(
-    "/api/albums/<album_id>/photos",
+    "/albums/<album_id>/photos",
     methods=["POST"]
 )
 def upload_photos(album_id):
@@ -230,10 +230,7 @@ def upload_photos(album_id):
                     f"{secure_filename(file.filename)}"
                 )
 
-                save_path = os.path.join(
-                    Config.UPLOAD_FOLDER,
-                    filename
-                )
+                save_path = os.path.join(Config.UPLOAD_FOLDER,filename)
 
                 file.save(save_path)
 
@@ -278,10 +275,7 @@ def upload_photos(album_id):
 # DELETE PHOTO
 # ==================================================
 
-@albums_bp.route(
-    "/api/albums/<album_id>/photos/<photo_id>",
-    methods=["DELETE"]
-)
+@albums_bp.route("/albums/<album_id>/photos/<photo_id>",methods=["DELETE"])
 def delete_photo(album_id, photo_id):
 
     album = get_album_by_id(album_id)
@@ -301,17 +295,11 @@ def delete_photo(album_id, photo_id):
     )
 
     if not photo:
-        return jsonify({
-            "error": "Photo not found"
-        }), 404
+        return jsonify({"error": "Photo not found"}), 404
 
     delete_photo_from_storage(photo)
 
-    updated_photos = [
-        p
-        for p in album["photos"]
-        if p.get("_id") != photo_id
-    ]
+    updated_photos = [p for p in album["photos"] if p.get("_id") != photo_id]
 
     albums_collection.update_one(
         {
@@ -324,22 +312,13 @@ def delete_photo(album_id, photo_id):
         }
     )
 
-    return jsonify({
-        "message": "Photo deleted successfully"
-    }), 200
+    return jsonify({"message": "Photo deleted successfully"}), 200
 
 
 # ==================================================
 # LOCAL FILE SERVING
 # ==================================================
 
-@albums_bp.route(
-    "/uploads/<path:filename>",
-    methods=["GET"]
-)
+@albums_bp.route("/uploads/<path:filename>",methods=["GET"])
 def serve_photo(filename):
-
-    return send_from_directory(
-        Config.UPLOAD_FOLDER,
-        filename
-    )
+    return send_from_directory(Config.UPLOAD_FOLDER,filename)

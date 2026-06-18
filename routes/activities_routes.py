@@ -1,12 +1,12 @@
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt
 from db import db
+from models.mongo import activities_collection
 from datetime import datetime
 from bson.objectid import ObjectId
 
 activities_bp = Blueprint('activities', __name__)
 
-# Get activities collection
-activities_col = db['activities']
 
 def convert_objectid_to_str(obj):
     """Convert ObjectId to string for JSON serialization"""
@@ -19,8 +19,23 @@ def convert_objectid_to_str(obj):
     return obj
 
 
+# Helper function to check admin role
+def admin_required(f):
+    from functools import wraps
+    @wraps(f)
+    @jwt_required()
+    def decorated_function(*args, **kwargs):
+        claims = get_jwt()
+        print("JWT Claims:", claims)
+        if claims.get('role') != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+
 # ------------------------ Activity APIs ------------------------
-@admin_bp.route('/add-activity', methods=['POST'])
+@activities_bp.route('/add-activity', methods=['POST'])
 @admin_required
 def add_activity():
     data = request.get_json()
@@ -36,14 +51,14 @@ def add_activity():
         "title": data['title'],
         "description": data['description'],
         "date": data['date'],
+        "location": data.get('location'),
+        "status": data.get('status'),
         "photos": data.get('photos', []),
         "reports": data.get('reports', []),
-        "location": data.get('location', 'SSN Campus'),
-        "status": data.get('status', 'upcoming')
     }
 
     # Insert into database
-    result = activities_col.insert_one(activity_data)
+    result = activities_collection.insert_one(activity_data)
     
     if result.inserted_id:
         # Convert ObjectId to string for JSON serialization
@@ -59,7 +74,7 @@ def add_activity():
 
 
 
-@admin_bp.route('/delete-activity', methods=['DELETE'])
+@activities_bp.route('/delete-activity', methods=['DELETE'])
 @admin_required
 def delete_activity():
     data = request.json
@@ -67,7 +82,7 @@ def delete_activity():
     # Prefer title-based deletion to match frontend
     title = data.get("title")
     if title:
-        result = activities_col.delete_one({"title": title})
+        result = activities_collection.delete_one({"title": title})
         if result.deleted_count:
             return jsonify({"message": "Activity deleted successfully"}), 200
         else:
@@ -76,7 +91,7 @@ def delete_activity():
     # Fallback to id-based deletion (legacy)
     activity_id = data.get("id")
     if activity_id:
-        result = activities_col.delete_one({"_id": ObjectId(activity_id)})
+        result = activities_collection.delete_one({"_id": ObjectId(activity_id)})
         if result.deleted_count:
             return jsonify({"message": "Activity deleted"}), 200
         else:
@@ -87,7 +102,7 @@ def delete_activity():
 
 
 
-@admin_bp.route('/update-activity', methods=['PUT'])
+@activities_bp.route('/update-activity', methods=['PUT'])
 @admin_required
 def update_activity():
     data = request.json
@@ -98,10 +113,13 @@ def update_activity():
     if data.get("newTitle"): update_data["title"] = data["newTitle"]
     if data.get("newDescription"): update_data["description"] = data["newDescription"]
     if data.get("newDate"): update_data["date"] = data["newDate"]
-    if data.get("newImageUrl"): update_data["imageUrl"] = data["newImageUrl"]
+    if data.get("newLocation"): update_data["location"] = data["newLocation"]
+    if data.get("newStatus"): update_data["status"] = data["newStatus"]
+    if data.get("newPhotos"): update_data["photos"] = data["newPhotos"]
+    if data.get("newReports"): update_data["reports"] = data["newReports"]
 
     if old_title:
-        result = activities_col.update_one(
+        result = activities_collection.update_one(
             {"title": old_title},
             {"$set": update_data}
         )
@@ -113,7 +131,7 @@ def update_activity():
     # Fallback to id-based if provided (legacy clients)
     activity_id = data.get("id")
     if activity_id:
-        result = activities_col.update_one(
+        result = activities_collection.update_one(
             {"_id": ObjectId(activity_id)},
             {"$set": update_data}
         )
@@ -127,15 +145,11 @@ def update_activity():
 
 
 
-@admin_bp.route('/get-activities', methods=['GET'])
-@jwt_required()
+@activities_bp.route('/get-activities', methods=['GET'])
 def get_activities():
     """Get all activities for admin view"""
     try:
-        # Use the shared DB handle to access the activities collection
-        from db import db
-        activities_col = db['activities']
-        activities = list(activities_col.find({}, {'_id': 0}))
+        activities = list(activities_collection.find({}, {'_id': 0}))
         return jsonify(activities), 200
         
     except Exception as e:

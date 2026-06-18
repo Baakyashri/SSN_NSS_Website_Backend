@@ -1,13 +1,19 @@
 import os
+from flask import Blueprint, request, jsonify
+from werkzeug.utils import secure_filename
 from utils.cloudinary import cloudinary
+from flask_jwt_extended import jwt_required
 import cloudinary
 import cloudinary.uploader
 from config import Config
 from db import db
 from datetime import datetime
 
+
 photos_bp = Blueprint('photos', __name__)
 UPLOAD_FOLDER = Config.UPLOAD_FOLDER
+
+
 # Allowed file extensions
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 ALLOWED_DOCUMENT_EXTENSIONS = {'pdf', 'docx', 'doc'}
@@ -67,59 +73,97 @@ def validate_mime_type(file, file_type='image'):
 
 
 
-
-
-@photos_bp.route('/admin/upload-photos', methods=['POST'])
+@photos_bp.route('/upload-photos', methods=['POST'])
 @jwt_required()
 def upload_photos():
-    """Upload multiple photos to Cloudinary"""
+    """Upload multiple photos to Cloudinary or local storage"""
+
     try:
         if 'photos' not in request.files:
             return jsonify({'error': 'No photos provided'}), 400
-        
+
         files = request.files.getlist('photos')
         uploaded_files = []
-        
+        print("USE_CLOUDINARY =", Config.USE_CLOUDINARY)
         for file in files:
-            # Basic validation
-            if file and file.filename and allowed_image_file(file.filename):
-                if not validate_mime_type(file, 'image'):
-                    continue
-                
-                # Upload to Cloudinary (Permanent Storage)
-                try:
-                    upload_result = cloudinary.uploader.upload(
-                        file,
-                        folder="nss/activities/photos", # distinct folder for organization
-                        resource_type="image"
-                    )
-                    
-                    # Store the Cloudinary URL (starts with http/https)
+            if not file or not file.filename:
+                continue
+            print("Filename:", file.filename)
+            print("Content Type:", file.content_type)
+            # Extension validation
+            if not allowed_image_file(file.filename):
+                print("Invalid extension")
+                continue
+            print("Extension Valid")
+            # MIME validation
+            if not validate_mime_type(file, 'image'):
+                print("Invalid MIME Type")
+                continue
+            print("MIME TYPE PASSED")
+            # File size validation
+            is_valid, error_msg = validate_file_size(file, 'image')
+            if not is_valid:
+                print(error_msg)
+                continue
+            try:
+                # ==========================
+                # CLOUDINARY UPLOAD
+                # ==========================
+                if Config.USE_CLOUDINARY:
+                    upload_result = cloudinary.uploader.upload(file,folder="nss/activities/photos",resource_type="image")
                     photo_data = {
-                        'filename': upload_result['public_id'], # Use public_id for reference
+                        'filename': upload_result['public_id'],
                         'original_name': file.filename,
-                        'url': upload_result['secure_url'],     # ✅ This is the permanent link
+                        'url': upload_result['secure_url'],
                         'uploaded_at': datetime.now().isoformat(),
-                        'mime_type': file.content_type
+                        'mime_type': file.content_type,
+                        'storage': 'cloudinary'
                     }
-                    uploaded_files.append(photo_data)
-                    
-                except Exception as upload_error:
-                    print(f"Cloudinary upload failed: {str(upload_error)}")
-                    continue
+
+                    print("Uploaded to Cloudinary")
+                # ==========================
+                # LOCAL UPLOAD
+                # ==========================
+                else:
+
+                    filename = secure_filename(file.filename)
+                    file_path = os.path.join(UPLOAD_FOLDER,filename)
+                    file.save(file_path)
+                    photo_data = {
+                        'filename': filename,
+                        'original_name': file.filename,
+                        'url': f'/uploads/{filename}',
+                        'uploaded_at': datetime.now().isoformat(),
+                        'mime_type': file.content_type,
+                        'storage': 'local'
+                    }
+                    print(f"Saved locally: {file_path}")
+
+                uploaded_files.append(photo_data)
+
+            except Exception as upload_error:
+                print(f"Upload failed: {str(upload_error)}")
+                continue
 
         if not uploaded_files:
             return jsonify({'error': 'No valid photos uploaded'}), 400
-        
+
         return jsonify({
             'message': f'Successfully uploaded {len(uploaded_files)} photos',
             'photos': uploaded_files
         }), 200
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+
+
+
+
+
         
-@photos_bp.route('/admin/get-photos', methods=['GET'])
+@photos_bp.route('/get-photos', methods=['GET'])
 @jwt_required()
 def get_photos():
     """Get all photos from the gallery"""
@@ -144,7 +188,7 @@ def get_photos():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@photos_bp.route('/admin/delete-photo', methods=['DELETE'])
+@photos_bp.route('/delete-photo', methods=['DELETE'])
 @jwt_required()
 def delete_photo():
     """Delete a photo from the gallery"""

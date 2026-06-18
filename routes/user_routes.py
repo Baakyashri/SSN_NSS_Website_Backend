@@ -1,13 +1,13 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from db import db
+from models.mongo import users_collection
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
 from config import Config
 import utils.validation as val 
 
 
-users_col = db['users']
+
 user_bp = Blueprint('user', __name__)
 
 # Helper function to check admin role
@@ -51,7 +51,7 @@ def add_user():
         return jsonify(msg=error), 400
 
     # Existing user check
-    if users_col.find_one({'email': email}):
+    if users_collection.find_one({'email': email}):
         return jsonify(msg="User already exists"), 400
 
     hashed_pw = generate_password_hash(password)
@@ -62,7 +62,7 @@ def add_user():
         'role': role
     }
 
-    users_col.insert_one(user_doc)
+    users_collection.insert_one(user_doc)
 
     return jsonify(msg=f"User {email} added successfully"), 201
 
@@ -80,7 +80,7 @@ def update_user():
     if not existing_email:
         return jsonify(msg="Existing email is required"), 400
 
-    user = users_col.find_one({'email': existing_email})
+    user = users_collection.find_one({'email': existing_email})
     if not user:
         return jsonify(msg="User not found"), 404
 
@@ -92,7 +92,7 @@ def update_user():
         valid, error = val.validate_email(new_email)
         if not valid:
             return jsonify(msg=error), 400
-        existing_user = users_col.find_one({'email': new_email})
+        existing_user = users_collection.find_one({'email': new_email})
         if existing_user and new_email != existing_email:
             return jsonify(msg="Email already exists"), 400
         update_data['email'] = new_email
@@ -113,7 +113,7 @@ def update_user():
     if not update_data:
         return jsonify(msg="No fields provided to update"), 400
 
-    users_col.update_one({'email': existing_email},{'$set': update_data})
+    users_collection.update_one({'email': existing_email},{'$set': update_data})
 
     return jsonify(msg="User updated successfully"), 200
 
@@ -129,7 +129,7 @@ def delete_user():
     if not valid:
         return jsonify(msg=error), 400
 
-    result = users_col.delete_one({'email': email})
+    result = users_collection.delete_one({'email': email})
 
     if result.deleted_count == 0:
         return jsonify(msg="User not found"), 404
@@ -140,7 +140,7 @@ def delete_user():
 @user_bp.route('/get-users', methods=['GET'])
 @admin_required
 def get_users():
-    users = list(users_col.find({}, {'password': 0}))  # hide password
+    users = list(users_collection.find({}, {'password': 0}))  # hide password
     for user in users:
         user['_id'] = str(user['_id'])
     return jsonify(users), 200
