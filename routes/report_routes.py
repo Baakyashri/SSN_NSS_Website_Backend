@@ -44,9 +44,7 @@ def validate_file_size(file, file_type='image'):
     file_size = file.tell()
     file.seek(0)  # Reset to beginning
     
-    if file_type == 'image' and file_size > MAX_IMAGE_SIZE:
-        return False, f"Image file too large. Maximum size: {MAX_IMAGE_SIZE // (1024*1024)}MB"
-    elif file_type == 'document' and file_size > MAX_DOCUMENT_SIZE:
+    if file_type == 'document' and file_size > MAX_DOCUMENT_SIZE:
         return False, f"Document file too large. Maximum size: {MAX_DOCUMENT_SIZE // (1024*1024)}MB"
     elif file_size > MAX_FILE_SIZE:
         return False, f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB"
@@ -57,9 +55,7 @@ def validate_file_size(file, file_type='image'):
 def validate_mime_type(file, file_type='image'):
     """Validate MIME type"""
     mime_type = file.content_type
-    if file_type == 'image':
-        return mime_type in ALLOWED_IMAGE_MIME_TYPES
-    elif file_type == 'document':
+    if file_type == 'document':
         return mime_type in ALLOWED_DOCUMENT_MIME_TYPES
     return False
 
@@ -141,32 +137,42 @@ def upload_reports():
 
 
 
-
-
 @reports_bp.route("/download-report", methods=["GET"])
 def download_report():
     url = request.args.get("url")
     filename = request.args.get("filename")
+    storage = request.args.get("storage")
     if not url:
         return jsonify({"error": "Invalid request"}), 400
     try:
-        # Local file
-        if url.startswith("/uploads/reports/"):
+        # =====================
+        # LOCAL FILE
+        # =====================
+        if storage == "local":
             local_filename = url.split("/")[-1]
-            return send_from_directory(UPLOAD_FOLDER,local_filename,as_attachment=True)
-        # Cloudinary file
-        r = requests.get(url, stream=True)
-        if r.status_code != 200:
-            return jsonify({"error": "Unable to fetch file"}), 500
-        return Response(
-            r.iter_content(chunk_size=4096),
-            headers={
-                "Content-Disposition": f'attachment; filename="{filename}"',
-                "Content-Type": r.headers.get(
-                    "Content-Type",
-                    "application/octet-stream"
-                )
-            }
-        )
+
+            return send_from_directory(
+                UPLOAD_FOLDER,
+                local_filename,
+                as_attachment=True,
+                download_name=filename or local_filename
+            )
+        # =====================
+        # CLOUDINARY FILE
+        # =====================
+        elif storage == "cloudinary":
+            r = requests.get(url, stream=True)
+            if r.status_code != 200:
+                return jsonify({"error": "Unable to fetch file"}), 500
+            return Response(
+                r.iter_content(chunk_size=4096),
+                headers={
+                    "Content-Disposition":
+                        f'attachment; filename="{filename}"',
+                    "Content-Type":
+                        r.headers.get("Content-Type","application/octet-stream")
+                }
+            )
+        return jsonify({"error": "Unknown storage type"}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
