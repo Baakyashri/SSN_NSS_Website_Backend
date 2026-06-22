@@ -7,3 +7,6 @@ Werkzeug==2.3.7
 gunicorn
 cloudinary
 requests
+langchain
+langchain-google-genai
+google-generativeai

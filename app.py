@@ -12,6 +12,7 @@ from routes.album_routes import albums_bp
 from routes.photos_routes import photos_bp
 from routes.report_routes import reports_bp
 from routes.contact_routes import contact_bp
+from routes.chat_routes import chat_bp
 
 
 # --------------------------------------------------
@@ -99,6 +100,7 @@ app.register_blueprint(albums_bp,url_prefix="/albums")
 app.register_blueprint(photos_bp,url_prefix="/photos")
 app.register_blueprint(reports_bp,url_prefix="/reports")
 app.register_blueprint(contact_bp,url_prefix="/contact")
+app.register_blueprint(chat_bp)
 
 
 # --------------------------------------------------

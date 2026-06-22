@@ -53,6 +53,8 @@ def add_activity():
         "date": data['date'],
         "location": data.get('location'),
         "status": data.get('status'),
+        "attendance_hours" : data.get('attendance_hours'),
+        "no_of_volunteers" : data.get('no_of_volunteers'),
         "photos": data.get('photos', []),
         "reports": data.get('reports', []),
     }
@@ -115,6 +117,8 @@ def update_activity():
     if data.get("newDate"): update_data["date"] = data["newDate"]
     if data.get("newLocation"): update_data["location"] = data["newLocation"]
     if data.get("newStatus"): update_data["status"] = data["newStatus"]
+    if data.get("newAttendanceHours"): update_data["attendance_hours"] = data["newAttendanceHours"]
+    if data.get("newNoOfVolunteers"): update_data["no_of_volunteers"] = data["newNoOfVolunteers"]
     if data.get("newPhotos"): update_data["photos"] = data["newPhotos"]
     if data.get("newReports"): update_data["reports"] = data["newReports"]
 
