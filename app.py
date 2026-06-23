@@ -5,6 +5,7 @@ from flask import send_from_directory
 import os
 import logging
 from config import Config
+from models.indexes import create_indexes
 from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
 from routes.activities_routes import activities_bp
@@ -12,7 +13,9 @@ from routes.album_routes import albums_bp
 from routes.photos_routes import photos_bp
 from routes.report_routes import reports_bp
 from routes.contact_routes import contact_bp
-from routes.chat_routes import chat_bp
+#langchain commented since langgraph is implemented using llm_factory
+#from routes.chat_langchain_routes import chat_bp
+from routes.registration_routes import registrations_bp
 
 
 # --------------------------------------------------
@@ -61,6 +64,13 @@ def home():
 
 
 
+#---------------------------------------------------
+#create indexes to avoid duplicates in collections, also for fast lookup
+#---------------------------------------------------
+create_indexes()
+
+
+
 # --------------------------------------------------
 # Error Handlers
 # --------------------------------------------------
@@ -89,6 +99,9 @@ def uploaded_file(filename):
         filename
     )
 
+
+
+
 # --------------------------------------------------
 # Register Blueprints
 # --------------------------------------------------
@@ -100,7 +113,8 @@ app.register_blueprint(albums_bp,url_prefix="/albums")
 app.register_blueprint(photos_bp,url_prefix="/photos")
 app.register_blueprint(reports_bp,url_prefix="/reports")
 app.register_blueprint(contact_bp,url_prefix="/contact")
-app.register_blueprint(chat_bp)
+#app.register_blueprint(chat_bp)
+app.register_blueprint(registrations_bp,url_prefix="/registrations")
 
 
 # --------------------------------------------------

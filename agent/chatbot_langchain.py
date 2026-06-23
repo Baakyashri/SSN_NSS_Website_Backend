@@ -1,39 +1,14 @@
 import os
 from dotenv import load_dotenv
-
+from agent.prompts.system_prompt import SYSTEM_PROMPT
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import (
-    HumanMessage,
-    AIMessage,
-    SystemMessage,
-    ToolMessage
-)
+from langchain_core.messages import HumanMessage,AIMessage,SystemMessage,ToolMessage
 
-from agents.tools.activity_tools import get_upcoming_events
+from agent.tools.activity_tools import get_upcoming_events
 
 load_dotenv()
 
-SYSTEM_PROMPT = """
-You are NSS AI Assistant for the NSS website.
 
-You can help with:
-
-1. General questions about NSS.
-2. Information about upcoming NSS activities.
-3. Questions about volunteering and community service.
-4. Questions about the NSS website.
-5. Guidance for NSS volunteers.
-
-Use your own knowledge for general NSS questions.
-
-Use tools whenever website-specific, database-specific,
-or user-specific information is needed.
-
-Do not refuse general NSS questions simply because
-a tool does not exist.
-
-Be friendly, concise, and helpful.
-"""
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",

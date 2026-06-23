@@ -148,13 +148,31 @@ def update_activity():
 
 
 
-
 @activities_bp.route('/get-activities', methods=['GET'])
 def get_activities():
-    """Get all activities for admin view"""
     try:
-        activities = list(activities_collection.find({}, {'_id': 0}))
+        activities = list(activities_collection.find())
+
+        for activity in activities:
+            activity['_id'] = str(activity['_id'])
+
         return jsonify(activities), 200
-        
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
+@activities_bp.route('/get-upcoming-activities', methods=['GET'])
+def get_upcoming_activities():
+    try:
+        activities = list(
+            activities_collection.find({"status": "upcoming"})
+        )
+
+        for activity in activities:
+            activity['_id'] = str(activity['_id'])
+
+        return jsonify(activities), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500

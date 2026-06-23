@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 
-from agents.chatbot import chat_with_ai
+from agent.chatbot_langchain import chat_with_ai
 
 chat_bp = Blueprint(
     "chat",
