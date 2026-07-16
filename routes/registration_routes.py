@@ -53,6 +53,15 @@ def create_registration():
             registration_doc
         )
 
+        # Increment registered_count on the activity
+        try:
+            activities_collection.update_one(
+                {"_id": ObjectId(activity_id)},
+                {"$inc": {"registered_count": 1}}
+            )
+        except Exception as e:
+            print("Failed to increment registered_count in create_registration:", e)
+
         return jsonify({
             "message": "Registration created",
             "registration_id": str(result.inserted_id)
@@ -123,13 +132,31 @@ def update_registration(registration_id):
 
 @registrations_bp.route("/delete-registration/<registration_id>",methods=["DELETE"])
 def delete_registration(registration_id):
+    try:
+        reg = registrations_collection.find_one({"_id": ObjectId(registration_id)})
+        if not reg:
+            return jsonify({"error": "Registration not found"}), 404
 
-    result = registrations_collection.delete_one({"_id": ObjectId(registration_id)})
+        activity_id = reg.get("activity_id")
 
-    if result.deleted_count == 0:
-        return jsonify({"error": "Registration not found"}), 404
+        result = registrations_collection.delete_one({"_id": ObjectId(registration_id)})
 
-    return jsonify({"message": "Registration deleted"}), 200
+        if result.deleted_count == 0:
+            return jsonify({"error": "Registration not found"}), 404
+
+        # Decrement registered_count on the activity
+        if activity_id:
+            try:
+                activities_collection.update_one(
+                    {"_id": ObjectId(activity_id) if isinstance(activity_id, str) else activity_id},
+                    {"$inc": {"registered_count": -1}}
+                )
+            except Exception as e:
+                print("Failed to decrement registered_count in delete_registration:", e)
+
+        return jsonify({"message": "Registration deleted"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 

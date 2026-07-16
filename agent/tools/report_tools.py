@@ -14,6 +14,7 @@ _log_tool_call writes to agent_audit_log on every invocation.
 
 import logging
 import time
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -22,12 +23,14 @@ from langchain_core.tools import tool
 
 from db import db
 
+from utils.ingestion import get_embeddings
+
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────
 # Roles allowed to submit report generation jobs
 # ─────────────────────────────────────────────────────────────
-REPORT_ADMIN_ROLES = {"admin", "nss-coordinator"}
+REPORT_ADMIN_ROLES = {"admin"}
 
 # Minimum chunks needed to include a narrative section in the report
 # (activities below this threshold get a stats-only report with a note)
@@ -98,7 +101,6 @@ def semantic_search_reports(
         top_k = min(int(top_k or 5), 10)
 
         # ── 1. Build query embedding ─────────────────────────
-        from utils.ingestion import get_embeddings
         query_vector = get_embeddings([query])[0]
 
         # ── 2. Build Atlas Vector Search pipeline ────────────
@@ -115,7 +117,11 @@ def semantic_search_reports(
             elif key in ("year", "month") and val is not None:
                 pre_filter[key] = int(val)
             elif key in ("category", "source") and val:
-                pre_filter[key] = val
+                # Case-insensitive whitespace-tolerant regex match
+                cleaned = re.sub(r"\s+", " ", str(val).strip())
+                escaped = re.escape(cleaned)
+                flexible = escaped.replace(r"\ ", r"\s*")
+                pre_filter[key] = {"$regex": f"^{flexible}$", "$options": "i"}
 
         vector_stage = {
             "$vectorSearch": {
@@ -181,7 +187,7 @@ def request_report(
     Returns immediately with a job_id; the report is compiled in the
     background and the user is notified by email when ready.
 
-    RESTRICTED TO: admin and NSS-coordinator roles only.
+    RESTRICTED TO: admin only.
 
     Supported scopes:
       "annual"          — full-year report (requires: year)
@@ -219,7 +225,7 @@ def request_report(
         return {
             "status": "error",
             "reason": (
-                f"Report generation is restricted to admin / NSS-coordinator roles. "
+                f"Report generation is restricted to admin. "
                 f"Current role: '{role}'. Contact your coordinator to request a report."
             )
         }
@@ -264,14 +270,19 @@ def request_report(
         result = db.agent_report_jobs.insert_one(job_doc)
         job_id = str(result.inserted_id)
 
-        scope_desc = {
-            "annual":          f"annual report for {year}",
-            "monthly":         f"monthly report for {year}-{month:02d}",
-            "single_activity": f"report for activity {activity_id}",
-            "category":        f"'{category}' category report"
-                               + (f" for {year}" if year else ""),
-            "comparison":      f"year-over-year comparison {year} vs {comparison_year}",
-        }
+        # ── Lazy evaluation of scope description to prevent formatting crash ──
+        if scope == "annual":
+            scope_desc_str = f"annual report for {year}"
+        elif scope == "monthly":
+            scope_desc_str = f"monthly report for {year}-{month:02d}"
+        elif scope == "single_activity":
+            scope_desc_str = f"report for activity {activity_id}"
+        elif scope == "category":
+            scope_desc_str = f"'{category}' category report" + (f" for {year}" if year else "")
+        elif scope == "comparison":
+            scope_desc_str = f"year-over-year comparison {year} vs {comparison_year}"
+        else:
+            scope_desc_str = f"report for {scope}"
 
         _log_tool_call(user_id, "request_report", params, 1, None,
                        int((time.time() - start) * 1000))
@@ -279,7 +290,7 @@ def request_report(
             "status":  "queued",
             "job_id":  job_id,
             "message": (
-                f"Your {scope_desc[scope]} has been queued (job ID: {job_id}). "
+                f"Your {scope_desc_str} has been queued (job ID: {job_id}). "
                 f"You will receive an email at {user_email} when it is ready. "
                 f"You can also check progress at /reports/jobs/{job_id}."
             )

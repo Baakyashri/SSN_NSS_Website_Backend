@@ -35,13 +35,13 @@ Collection: users  (READ ONLY)
 
 Collection: activities  (READ ONLY)
     _id, title, description, date (datetime), location, status ("upcoming" | "completed"),
-    attendance_hours (int), no_of_volunteers (int), category (str),
+    attendance_hours (int), no_of_volunteers (int — represents the number of volunteers who actually participated for a completed activity; slots/target count for an upcoming activity), category (str),
     day_of_week (list of str, e.g. ["saturday"]), required_tags (list),
     registered_count (int), photos (list), reports (list)
 
 Collection: registrations  (READ + INSERT + UPDATE)
     _id, user_id (ObjectId), user_email, activity_id (ObjectId), activity_title,
-    registered_at (datetime), status ("registered"), attendance_status ("present" | "absent")
+    registered_at (datetime), status ("registered" | "attended")
 
 Collection: agent_volunteer_profiles  (READ + WRITE — agent owned)
     _id, user_id (ObjectId), user_email, name, department, year (int),
@@ -64,6 +64,7 @@ Collection: agent_memory  (READ + WRITE — agent owned)
 MULTI-STEP REASONING RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+- When querying or matching an activity by title, if you are not sure of its exact spelling, spacing, or casing, first call query_records on activities with an empty filter to get the exact stored title, then use it.
 - Always request only the fields you need (fields parameter) — never fetch all fields.
 - When chaining tools, pass only IDs between steps — never pass full document lists.
 - For hours-related questions, always call get_volunteer_hours_summary first.

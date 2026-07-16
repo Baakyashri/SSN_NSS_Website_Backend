@@ -154,15 +154,15 @@ def _case_insensitive_exact(value: str):
     """
     Build a MongoDB regex filter that matches the value case-insensitively
     and tolerant of leading/trailing whitespace differences in the stored
-    document. Anchors the match so it's still an "exact" match semantically,
-    just casing/whitespace-tolerant — not a partial/substring match.
+    document, as a substring match (without start/end anchors) so that
+    variations like 'Meditation Event' or 'Meditation' match 'online meditation'.
     """
     cleaned = _normalise_string(value)
     # Escape regex special characters in the user-provided text
     escaped = re.escape(cleaned)
     # Allow flexible whitespace between words (handles "Workshop -" vs "Workshop-")
     flexible = escaped.replace(r"\ ", r"\s*")
-    return {"$regex": f"^{flexible}$", "$options": "i"}
+    return {"$regex": flexible, "$options": "i"}
 
 
 def _build_mongo_filter(filters: dict) -> dict:
@@ -486,7 +486,7 @@ def get_volunteer_hours_summary(
             {
                 "$match": {
                     "user_id"          : {"$in": oid_list},
-                    "attendance_status": "present",
+                    "status"           : "attended",
                 }
             },
             {
@@ -659,9 +659,35 @@ def mutate_record(
             payload["created_by"]  = user_id
 
             result = db[collection].insert_one(payload)
+            inserted_id_str = str(result.inserted_id)
+
+            # Trigger background ingestion and auto-reporting if it's an activity
+            if collection == "activities":
+                try:
+                    from utils.ingestion import run_ingestion_in_background, extract_activity_metadata, check_and_enqueue_auto_report
+                    metadata = extract_activity_metadata(payload)
+                    reports = payload.get("reports", [])
+                    if reports:
+                        run_ingestion_in_background(inserted_id_str, reports, metadata)
+                    check_and_enqueue_auto_report(inserted_id_str, payload)
+                except Exception as exc:
+                    logger.error(f"Failed to trigger auto-report/ingestion on insert: {exc}")
+
+            # Increment registered_count on activity if it's a registration
+            if collection == "registrations":
+                activity_id = payload.get("activity_id")
+                if activity_id:
+                    try:
+                        db.activities.update_one(
+                            {"_id": ObjectId(activity_id) if isinstance(activity_id, str) else activity_id},
+                            {"$inc": {"registered_count": 1}}
+                        )
+                    except Exception as exc:
+                        logger.error(f"Failed to increment registered_count on insert: {exc}")
+
             out = {
                 "status"     : "success",
-                "inserted_id": str(result.inserted_id),
+                "inserted_id": inserted_id_str,
                 "message"    : f"Record added to '{collection}' successfully."
             }
 
@@ -688,6 +714,21 @@ def mutate_record(
                     )
                 }
 
+            # Trigger auto-reporting if it's an activity
+            if collection == "activities":
+                try:
+                    from utils.ingestion import run_ingestion_in_background, extract_activity_metadata, check_and_enqueue_auto_report
+                    updated_docs = list(db.activities.find(mfilter))
+                    for doc in updated_docs:
+                        doc_id_str = str(doc["_id"])
+                        metadata = extract_activity_metadata(doc)
+                        reports = doc.get("reports", [])
+                        if reports:
+                            run_ingestion_in_background(doc_id_str, reports, metadata)
+                        check_and_enqueue_auto_report(doc_id_str, doc)
+                except Exception as exc:
+                    logger.error(f"Failed to trigger auto-report/ingestion on update: {exc}")
+
             out = {
                 "status"        : "success",
                 "matched_count" : result.matched_count,
@@ -701,6 +742,15 @@ def mutate_record(
                     "reason": "Delete requires a filter. Refusing bulk delete."
                 }
 
+            # If deleting registrations, collect their activity_ids first to decrement registered_count
+            activity_ids_to_decrement = []
+            if collection == "registrations":
+                try:
+                    deleted_regs = list(db.registrations.find(mfilter, {"activity_id": 1}))
+                    activity_ids_to_decrement = [r.get("activity_id") for r in deleted_regs if r.get("activity_id")]
+                except Exception as exc:
+                    logger.error(f"Failed to find registrations before deletion: {exc}")
+
             result = db[collection].delete_many(mfilter)
 
             if result.deleted_count == 0:
@@ -711,6 +761,17 @@ def mutate_record(
                         f"filter, even with case-insensitive matching."
                     )
                 }
+
+            # Decrement registered_count on activities
+            if collection == "registrations" and activity_ids_to_decrement:
+                for act_id in activity_ids_to_decrement:
+                    try:
+                        db.activities.update_one(
+                            {"_id": ObjectId(act_id) if isinstance(act_id, str) else act_id},
+                            {"$inc": {"registered_count": -1}}
+                        )
+                    except Exception as exc:
+                        logger.error(f"Failed to decrement registered_count on delete: {exc}")
 
             out = {"status": "success", "deleted_count": result.deleted_count}
 

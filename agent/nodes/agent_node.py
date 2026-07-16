@@ -87,8 +87,7 @@ def agent_node(state: dict, config: RunnableConfig):
                             "activity_id": activity_id,
                             "activity_title": title,
                             "registered_at": datetime now,
-                            "status": "registered",
-                            "attendance_status": "pending"
+                            "status": "registered"
                         }
                 Step 4: Report the ACTUAL return value from mutate_record to the user.
                         Do NOT say success unless tool returned status: success.
