@@ -12,3 +12,10 @@ langchain-google-genai
 google-generativeai
 langgraph
 langchain-groq
+apscheduler
+pytz
+fastembed
+pypdf
+python-docx
+reportlab
+matplotlib

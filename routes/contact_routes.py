@@ -1,3 +1,5 @@
+# do credential validation check later
+
 from flask import Blueprint, request, jsonify
 import smtplib
 from email.message import EmailMessage
@@ -9,8 +11,8 @@ from utils.validation import validate_contact_data, sanitize_input
 contact_bp = Blueprint('contact', __name__)
 
 # Load your credentials from environment variables or config file
-EMAIL_ADDRESS = os.environ.get("GMAIL_USER")  # Your Gmail address
-EMAIL_PASSWORD = os.environ.get("GMAIL_PASS")  # Your Gmail app password
+EMAIL_ADDRESS = os.environ.get("GMAIL_SENDER_EMAIL")  # Your Gmail address
+EMAIL_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")  # Your Gmail app password
 
 #debug print
 #print("EMAIL:", EMAIL_ADDRESS)
@@ -33,9 +35,9 @@ def send_contact_message():
             return jsonify({'error': error}), 400
 
         # Sanitize inputs
-        name = sanitize_input(data['name'], 100)
-        email = sanitize_input(data['email'], 254)
-        message_content = sanitize_input(data['message'], 2000)
+        name = data['name'], 100
+        email = data['email'], 254
+        message_content = data['message'], 2000
 
         # Check if email credentials are configured
         if not EMAIL_ADDRESS or not EMAIL_PASSWORD:

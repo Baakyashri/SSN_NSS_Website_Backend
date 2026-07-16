@@ -1,10 +1,11 @@
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify,request, send_from_directory
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask import send_from_directory
 import os
 import logging
 from config import Config
+from scheduler import start_scheduler
 from models.indexes import create_indexes
 from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
@@ -15,7 +16,10 @@ from routes.report_routes import reports_bp
 from routes.contact_routes import contact_bp
 #langchain commented since langgraph is implemented using llm_factory
 #from routes.chat_langchain_routes import chat_bp
+from routes.chat_langgraph_routes import chat_langgraph_bp
 from routes.registration_routes import registrations_bp
+from routes.attendance_routes import attendance_bp
+from routes.report_job_routes import report_jobs_bp
 
 
 # --------------------------------------------------
@@ -63,11 +67,44 @@ def home():
     })
 
 
+# --------------------------------------------------
+# Ping — keeps Render alive via cron-job.org
+# Also used by Render Cron Job to trigger reminders
+# --------------------------------------------------
+ 
+@app.route("/internal/ping", methods=["GET"])
+def ping():
+    return jsonify({"status": "alive"}), 200
+ 
+ 
+@app.route("/internal/run-reminders", methods=["POST"])
+def run_reminders():
+    """
+    Called by Render Cron Job every minute in production.
+    Protected by a secret key so only Render can trigger it.
+    """
+    secret = request.headers.get("X-Internal-Secret", "")
+    if secret != os.getenv("INTERNAL_SECRET", ""):
+        return jsonify({"error": "unauthorized"}), 401
+ 
+    try:
+        from scheduler import check_and_send_reminders
+        check_and_send_reminders()
+        return jsonify({"status": "done"}), 200
+    except Exception as e:
+        logger.exception(e)
+        return jsonify({"error": str(e)}), 500
 
 #---------------------------------------------------
 #create indexes to avoid duplicates in collections, also for fast lookup
 #---------------------------------------------------
 create_indexes()
+
+
+#---------------------------------------------------
+# start scheduler
+#---------------------------------------------------
+start_scheduler()
 
 
 
@@ -114,8 +151,10 @@ app.register_blueprint(photos_bp,url_prefix="/photos")
 app.register_blueprint(reports_bp,url_prefix="/reports")
 app.register_blueprint(contact_bp,url_prefix="/contact")
 #app.register_blueprint(chat_bp)
+app.register_blueprint(chat_langgraph_bp)
 app.register_blueprint(registrations_bp,url_prefix="/registrations")
-
+app.register_blueprint(attendance_bp,url_prefix="/attendance")
+app.register_blueprint(report_jobs_bp,url_prefix="/reports")
 
 # --------------------------------------------------
 # Application Entry Point

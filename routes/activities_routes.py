@@ -53,7 +53,7 @@ def add_activity():
         "date": data['date'],
         "location": data.get('location'),
         "status": data.get('status'),
-        "attendance_hours" : data.get('attendance_hours'),
+        "attendance_hours" : data.get('attendance_hours','0'),
         "no_of_volunteers" : data.get('no_of_volunteers'),
         "photos": data.get('photos', []),
         "reports": data.get('reports', []),
@@ -63,11 +63,30 @@ def add_activity():
     result = activities_collection.insert_one(activity_data)
     
     if result.inserted_id:
+        activity_id_str = str(result.inserted_id)
+
+        # Trigger background report ingestion if reports are present
+        reports = activity_data.get("reports", [])
+        if reports:
+            try:
+                from utils.ingestion import run_ingestion_in_background, extract_activity_metadata
+                metadata = extract_activity_metadata(activity_data)
+                run_ingestion_in_background(activity_id_str, reports, metadata)
+            except Exception as e:
+                print("Failed to trigger background ingestion in add_activity:", e)
+
+        # Auto-enqueue a single_activity report job if activity is finalized
+        try:
+            from utils.ingestion import check_and_enqueue_auto_report
+            check_and_enqueue_auto_report(activity_id_str, activity_data)
+        except Exception as e:
+            print("Failed to trigger auto-report in add_activity:", e)
+
         # Convert ObjectId to string for JSON serialization
         safe_activity_data = convert_objectid_to_str(activity_data)
         return jsonify({
             "message": "Activity added successfully",
-            "activity_id": str(result.inserted_id),
+            "activity_id": activity_id_str,
             "activity": safe_activity_data
         }), 201
     else:
@@ -122,29 +141,61 @@ def update_activity():
     if data.get("newPhotos"): update_data["photos"] = data["newPhotos"]
     if data.get("newReports"): update_data["reports"] = data["newReports"]
 
+    updated_activity = None
+    message = ""
+    status_code = 200
+
     if old_title:
         result = activities_collection.update_one(
             {"title": old_title},
             {"$set": update_data}
         )
         if result.modified_count:
-            return jsonify({"message": "Activity updated successfully"}), 200
+            target_title = update_data.get("title", old_title)
+            updated_activity = activities_collection.find_one({"title": target_title})
+            message = "Activity updated successfully"
+            status_code = 200
         else:
             return jsonify({"error": "No activity found with that title"}), 404
 
-    # Fallback to id-based if provided (legacy clients)
-    activity_id = data.get("id")
-    if activity_id:
-        result = activities_collection.update_one(
-            {"_id": ObjectId(activity_id)},
-            {"$set": update_data}
-        )
-        if result.modified_count:
-            return jsonify({"message": "Activity updated"}), 200
+    else:
+        # Fallback to id-based if provided (legacy clients)
+        activity_id = data.get("id")
+        if activity_id:
+            result = activities_collection.update_one(
+                {"_id": ObjectId(activity_id)},
+                {"$set": update_data}
+            )
+            if result.modified_count:
+                updated_activity = activities_collection.find_one({"_id": ObjectId(activity_id)})
+                message = "Activity updated"
+                status_code = 200
+            else:
+                return jsonify({"error": "No activity updated. Check ID."}), 404
         else:
-            return jsonify({"error": "No activity updated. Check ID."}), 404
+            return jsonify({"error": "Provide either oldTitle or id to update activity"}), 400
 
-    return jsonify({"error": "Provide either oldTitle or id to update activity"}), 400
+    if updated_activity:
+        activity_id_str = str(updated_activity["_id"])
+
+        # Trigger background report ingestion if reports are present
+        reports = updated_activity.get("reports", [])
+        if reports:
+            try:
+                from utils.ingestion import run_ingestion_in_background, extract_activity_metadata
+                metadata = extract_activity_metadata(updated_activity)
+                run_ingestion_in_background(activity_id_str, reports, metadata)
+            except Exception as e:
+                print("Failed to trigger background ingestion in update_activity:", e)
+
+        # Auto-enqueue a single_activity report job if activity is finalized
+        try:
+            from utils.ingestion import check_and_enqueue_auto_report
+            check_and_enqueue_auto_report(activity_id_str, updated_activity)
+        except Exception as e:
+            print("Failed to trigger auto-report in update_activity:", e)
+
+    return jsonify({"message": message}), status_code
 
 
 
