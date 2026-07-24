@@ -52,7 +52,7 @@ def add_activity():
         "description": data['description'],
         "date": data['date'],
         "location": data.get('location'),
-        "status": data.get('status'),
+        "status": data.get('status').replace(" ","").casefold(),
         "attendance_hours" : data.get('attendance_hours','0'),
         "no_of_volunteers" : data.get('no_of_volunteers'),
         "photos": data.get('photos', []),
@@ -101,13 +101,28 @@ def delete_activity():
     data = request.json
 
     # Prefer title-based deletion to match frontend
-    title = data.get("title")
-    if title:
-        result = activities_collection.delete_one({"title": title})
-        if result.deleted_count:
-            return jsonify({"message": "Activity deleted successfully"}), 200
-        else:
-            return jsonify({"error": "No activity found with that title"}), 404
+    title = data.get("title", "")
+
+    normalized = title.replace(" ", "").casefold()
+
+    result = activities_collection.delete_one({
+        "$expr": {
+            "$eq": [
+                {
+                    "$replaceAll": {
+                        "input": {"$toLower": "$title"},
+                        "find": " ",
+                        "replacement": ""
+                    }
+                },
+                normalized
+            ]
+        }
+    })
+    if result.deleted_count:
+        return jsonify({"message": "Activity deleted successfully"}), 200
+    else:
+        return jsonify({"error": "No activity found with that title"}), 404
 
     # Fallback to id-based deletion (legacy)
     activity_id = data.get("id")
@@ -129,12 +144,12 @@ def update_activity():
     data = request.json
 
     # Support both title-based and id-based updates, prefer title-based to match frontend
-    old_title = data.get("oldTitle")
+    old_title = data.get("oldTitle").replace(" ","").casefold()
     update_data = {}
     if data.get("newTitle"): update_data["title"] = data["newTitle"]
     if data.get("newDescription"): update_data["description"] = data["newDescription"]
     if data.get("newDate"): update_data["date"] = data["newDate"]
-    if data.get("newLocation"): update_data["location"] = data["newLocation"]
+    if data.get("newLocation"): update_data["location"] = data["newLocation"].replace(" ","").casefold()
     if data.get("newStatus"): update_data["status"] = data["newStatus"]
     if data.get("newAttendanceHours"): update_data["attendance_hours"] = data["newAttendanceHours"]
     if data.get("newNoOfVolunteers"): update_data["no_of_volunteers"] = data["newNoOfVolunteers"]
@@ -147,7 +162,20 @@ def update_activity():
 
     if old_title:
         result = activities_collection.update_one(
-            {"title": old_title},
+            {
+                "$expr": {
+                    "$eq": [
+                        {
+                            "$replaceAll": {
+                                "input": {"$toLower": "$title"},
+                                "find": " ",
+                                "replacement": ""
+                            }
+                        },
+                        old_title
+                    ]
+                }
+            },
             {"$set": update_data}
         )
         if result.modified_count:

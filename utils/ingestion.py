@@ -160,24 +160,29 @@ def get_embeddings(chunks: list) -> list:
             _fastembed_failed = True
 
     # 2. Fallback to Gemini API
-    logger.info("Generating embeddings using Gemini text-embedding-004 API fallback...")
+    logger.info("Generating embeddings using Gemini gemini-embedding-001 API fallback...")
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY is not set. Embedding fallback unavailable.")
 
-    import google.generativeai as genai
-    genai.configure(api_key=api_key)
+    from google import genai
+    from google.genai import types
 
-    response = genai.embed_content(
-        model="models/text-embedding-004",
-        content=chunks,
-        task_type="retrieval_document"
+    client = genai.Client(api_key=api_key)
+
+    response = client.models.embed_content(
+        model="gemini-embedding-001",
+        contents=chunks,
+        config=types.EmbedContentConfig(
+            task_type="RETRIEVAL_DOCUMENT",
+            output_dimensionality=768,
+        )
     )
 
-    if 'embeddings' not in response:
+    if not response.embeddings:
         raise RuntimeError("Failed to retrieve embeddings from Gemini API response.")
 
-    embeddings = response['embeddings']
+    embeddings = [e.values for e in response.embeddings]
     logger.info(f"Generated {len(embeddings)} embeddings using Gemini API.")
     return embeddings
 

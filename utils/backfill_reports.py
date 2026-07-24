@@ -1,7 +1,8 @@
 import os
 import sys
 import logging
-
+from dotenv import load_dotenv
+load_dotenv() 
 # Ensure project root is in path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
