@@ -20,3 +20,4 @@ python-docx
 reportlab
 matplotlib
 google-genai
+boto3

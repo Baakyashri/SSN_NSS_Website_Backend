@@ -1,12 +1,13 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_from_directory, Response
 from flask_jwt_extended import jwt_required
 from werkzeug.utils import secure_filename
-from flask import send_from_directory
 import cloudinary
 import cloudinary.uploader
 from datetime import datetime
 from config import Config
 import os 
+import requests
+import boto3
 
 
 
@@ -84,9 +85,37 @@ def upload_reports():
                 continue
             try:
                 # =====================
+                # AWS S3
+                # =====================
+                if Config.USE_S3:
+                    s3_client = boto3.client(
+                        's3',
+                        aws_access_key_id=Config.AWS_ACCESS_KEY_ID,
+                        aws_secret_access_key=Config.AWS_SECRET_ACCESS_KEY,
+                        region_name=Config.AWS_REGION
+                    )
+                    s3_key = f"nss/activities/reports/{filename}"
+                    s3_client.upload_fileobj(
+                        file, 
+                        Config.S3_BUCKET_NAME, 
+                        s3_key,
+                        ExtraArgs={'ContentType': file.content_type}
+                    )
+                    s3_url = f"https://{Config.S3_BUCKET_NAME}.s3.{Config.AWS_REGION}.amazonaws.com/{s3_key}"
+                    report_data = {
+                        "url": s3_url,
+                        "filename": filename,
+                        "original_name": file.filename,
+                        "uploaded_at": datetime.utcnow().isoformat(),
+                        "type": "report",
+                        "mime_type": file.content_type,
+                        "storage": "s3"
+                    }
+                    print(f"Uploaded report to AWS S3: {s3_url}")
+                # =====================
                 # CLOUDINARY
                 # =====================
-                if Config.USE_CLOUDINARY:
+                elif Config.USE_CLOUDINARY:
                     result = cloudinary.uploader.upload(
                         file,
                         folder="nss/activities/reports",
@@ -158,9 +187,9 @@ def download_report():
                 download_name=filename or local_filename
             )
         # =====================
-        # CLOUDINARY FILE
+        # S3 OR CLOUDINARY FILE
         # =====================
-        elif storage == "cloudinary":
+        elif storage in ("cloudinary", "s3"):
             r = requests.get(url, stream=True)
             if r.status_code != 200:
                 return jsonify({"error": "Unable to fetch file"}), 500

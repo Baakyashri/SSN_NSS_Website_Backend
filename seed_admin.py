@@ -3,7 +3,7 @@ from db import db
 
 users_col = db["users"]
 
-ADMIN_EMAIL = "admin@nss.com"
+ADMIN_EMAIL = "nssofssnofficial@gmail.com"
 ADMIN_PASSWORD = "Admin123"  # change this
 
 def seed_admin():

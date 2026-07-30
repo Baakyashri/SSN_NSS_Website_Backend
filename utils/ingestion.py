@@ -5,6 +5,7 @@ import logging
 import hashlib
 import requests
 from datetime import datetime, timezone
+# pyrefly: ignore [missing-import]
 from bson import ObjectId
 
 from pypdf import PdfReader
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 # Cache fastembed model and failure state
 _fastembed_model = None
 _fastembed_failed = False
+
 
 # ─────────────────────────────────────────────────────────────
 # 1. PII SCRUBBER
@@ -136,7 +138,7 @@ def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> list:
 def get_embeddings(chunks: list) -> list:
     """
     Generates embedding vectors for a list of text chunks.
-    First tries local fastembed, falling back to Gemini text-embedding-004.
+    First tries local fastembed, falling back to Gemini API.
     """
     global _fastembed_model, _fastembed_failed
 
@@ -175,7 +177,7 @@ def get_embeddings(chunks: list) -> list:
         contents=chunks,
         config=types.EmbedContentConfig(
             task_type="RETRIEVAL_DOCUMENT",
-            output_dimensionality=768,
+            output_dimensionality=384,
         )
     )
 
@@ -205,7 +207,7 @@ def _get_report_file_bytes(report: dict) -> bytes:
         with open(local_path, "rb") as f:
             return f.read()
 
-    elif storage == "cloudinary":
+    elif storage in ("cloudinary", "s3"):
         r = requests.get(url, timeout=30)
         r.raise_for_status()
         return r.content

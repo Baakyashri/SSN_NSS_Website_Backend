@@ -146,19 +146,33 @@ def update_activity():
     # Support both title-based and id-based updates, prefer title-based to match frontend
     old_title = data.get("oldTitle").replace(" ","").casefold()
     update_data = {}
-    if data.get("newTitle"): update_data["title"] = data["newTitle"]
-    if data.get("newDescription"): update_data["description"] = data["newDescription"]
-    if data.get("newDate"): update_data["date"] = data["newDate"]
-    if data.get("newLocation"): update_data["location"] = data["newLocation"].replace(" ","").casefold()
-    if data.get("newStatus"): update_data["status"] = data["newStatus"]
-    if data.get("newAttendanceHours"): update_data["attendance_hours"] = data["newAttendanceHours"]
-    if data.get("newNoOfVolunteers"): update_data["no_of_volunteers"] = data["newNoOfVolunteers"]
-    if data.get("newPhotos"): update_data["photos"] = data["newPhotos"]
-    if data.get("newReports"): update_data["reports"] = data["newReports"]
+
+    field_mapping = {
+        "newTitle": "title",
+        "newDescription": "description",
+        "newDate": "date",
+        "newStatus": "status",
+        "newAttendanceHours": "attendance_hours",
+        "newNoOfVolunteers": "no_of_volunteers",
+        "newPhotos": "photos",
+        "newReports": "reports"
+    }
+
+    for frontend_field, db_field in field_mapping.items():
+        value = data.get(frontend_field)
+        if value not in [None, "", []]:
+            update_data[db_field] = value
+
+    location = data.get("newLocation")
+    if location not in [None, ""]:
+        update_data["location"] = location.replace(" ", "").casefold()
 
     updated_activity = None
     message = ""
     status_code = 200
+
+    if not update_data:
+        return jsonify({"error": "No fields provided to update"}), 400
 
     if old_title:
         result = activities_collection.update_one(

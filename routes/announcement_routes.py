@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from datetime import datetime
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from models.mongo import announcements_collection
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -32,7 +33,21 @@ def add_announcement():
     data = request.json
     name = data.get('ActivityName')
     text = data.get('ActivityDescription')
-    announcements_collection.insert_one({'activityName': name, 'activityDescription': text})
+    expire_at_str = data.get('expireAt')
+    
+    announcement_doc = {
+        'activityName': name, 
+        'activityDescription': text
+    }
+    
+    if expire_at_str:
+        try:
+            # Parse YYYY-MM-DD from HTML date input
+            announcement_doc['expireAt'] = datetime.strptime(expire_at_str, '%Y-%m-%d')
+        except ValueError:
+            pass # Ignore invalid date format
+            
+    announcements_collection.insert_one(announcement_doc)
     return jsonify({"message": "Announcement added"}), 201
 
 
@@ -68,7 +83,6 @@ def delete_announcement():
 
 
 @announcements_bp.route('/get-announcements', methods=['GET'])
-@admin_required
 def get_announcements():
     anns = list(announcements_collection.find())
     for ann in anns:
